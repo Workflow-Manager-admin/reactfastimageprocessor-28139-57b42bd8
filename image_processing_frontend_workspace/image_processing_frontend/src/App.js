@@ -1,3 +1,4 @@
+// React-based Image Processor Frontend
 import React, { useState, useRef } from 'react';
 import './App.css';
 
@@ -10,28 +11,28 @@ import './App.css';
 const API_BASE = 'https://vscode-internal-5476-qa.qa01.cloud.kavia.ai:3001';
 
 function App() {
-  // State for the original uploaded image
+  // State: File, preview, backend image IDs, UI
   const [originalFile, setOriginalFile] = useState(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState(null);
   const [originalImageId, setOriginalImageId] = useState(null);
 
-  // State for processing
   const [processingOption, setProcessingOption] = useState('resize'); // 'resize' or 'filter'
   const [resizeWidth, setResizeWidth] = useState('');
   const [resizeHeight, setResizeHeight] = useState('');
   const [filterType, setFilterType] = useState('blur');
   const [processing, setProcessing] = useState(false);
+
   const [processedImageId, setProcessedImageId] = useState(null);
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState(null);
 
-  // Notification & error
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const inputFileRef = useRef();
 
-  // Helpers for feedback
+  // State resets/preview construction
   const handleError = (msg) => {
     setError(msg);
     setTimeout(() => setError(''), 5000);
@@ -41,20 +42,24 @@ function App() {
     setTimeout(() => setInfo(''), 3500);
   };
 
-  // Step 1: User selects file
+  // Fileselect: Reset process state if new file chosen
   const handleFileSelect = (e) => {
     setProcessedImageId(null);
     setProcessedPreviewUrl(null);
+    setOriginalImageId(null);
+
     const file = e.target.files[0];
     if (!file) return;
     setOriginalFile(file);
-    setOriginalImageId(null);
     setOriginalPreviewUrl(URL.createObjectURL(file));
   };
 
-  // Step 1b: Upload
+  // Upload file to backend (POST /upload-image/)
   const uploadImage = async () => {
-    if (!originalFile) return;
+    if (!originalFile) {
+      handleError('Choose an image before uploading');
+      return;
+    }
     setUploading(true);
     setError('');
     setInfo('');
@@ -70,23 +75,26 @@ function App() {
         body: formData,
       });
       if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.detail || 'Upload failed');
+        // Try to get JSON error details if possible, otherwise fallback
+        let err;
+        try { err = await resp.json(); } catch { }
+        throw new Error((err && err.detail) ? err.detail : 'Upload failed');
       }
       const data = await resp.json();
+      if (!data || !data.image_id) throw new Error('Upload failed (no id returned)');
       setOriginalImageId(data.image_id);
       handleInfo('Image uploaded successfully');
     } catch (e) {
-      handleError(e.message || 'Upload error');
+      handleError(e?.message || 'Upload error');
     } finally {
       setUploading(false);
     }
   };
 
-  // Step 2: Processing
+  // Send image processing request
   const handleProcess = async () => {
     if (!originalImageId) {
-      handleError('Please upload an image first');
+      handleError('Upload an image first');
       return;
     }
     setProcessing(true);
@@ -116,40 +124,79 @@ function App() {
         }
       );
       if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err.detail || 'Processing failed');
+        let err;
+        try { err = await resp.json(); } catch { }
+        throw new Error((err && err.detail) ? err.detail : 'Processing failed');
       }
       const data = await resp.json();
+      if (!data || !data.processed_id) {
+        throw new Error('Processing failed (no processed_id)');
+      }
       setProcessedImageId(data.processed_id);
       handleInfo('Image processed!');
     } catch (e) {
-      handleError(e.message || 'Processing error');
+      handleError(e?.message || 'Processing error');
     } finally {
       setProcessing(false);
     }
   };
 
-  // Step 3: Recompute image URLs
+  // Dynamically update preview for original
   React.useEffect(() => {
     if (originalImageId) {
       setOriginalPreviewUrl(
         `${API_BASE}/get-image/?image_id=${originalImageId}&processed=false&_=${Date.now()}`
       );
+    } else if (originalFile) {
+      setOriginalPreviewUrl(URL.createObjectURL(originalFile));
+    } else {
+      setOriginalPreviewUrl(null);
     }
+    // eslint-disable-next-line
   }, [originalImageId]);
+
+  // Dynamically update preview for processed image
   React.useEffect(() => {
     if (processedImageId) {
       setProcessedPreviewUrl(
         `${API_BASE}/get-image/?image_id=${processedImageId}&processed=true&_=${Date.now()}`
       );
+    } else {
+      setProcessedPreviewUrl(null);
     }
+    // eslint-disable-next-line
   }, [processedImageId]);
 
-  // --- MAIN RENDER ---
+  // Download button for processed image
+  const handleDownload = async () => {
+    if (!processedPreviewUrl) return;
+    setDownloading(true);
+    setError('');
+    try {
+      const resp = await fetch(processedPreviewUrl);
+      if (!resp.ok) throw new Error('Failed to download processed image');
+      const blob = await resp.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'processed_image.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      handleInfo('Processed image saved!');
+    } catch (e) {
+      handleError(e?.message || 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  // --- RENDER ---
   return (
     <div className="app">
       <nav className="navbar">
-        <div className="container" style={{width: '100%'}}>
+        <div className="container" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             <div className="logo">
               <span className="logo-symbol">★</span> KAVIA AI
@@ -158,7 +205,7 @@ function App() {
               className="btn"
               onClick={() => inputFileRef.current && inputFileRef.current.click()}
               disabled={uploading}
-              style={{minWidth: 125, fontWeight: 600}}
+              style={{ minWidth: 125, fontWeight: 600 }}
             >
               {uploading ? 'Uploading...' : 'Upload Image'}
             </button>
@@ -177,9 +224,9 @@ function App() {
 
       <main>
         <div className="container">
-          <div className="hero" style={{paddingTop: 70, paddingBottom: 25, gap: 16}}>
+          <div className="hero" style={{ paddingTop: 70, paddingBottom: 25, gap: 16 }}>
             <div className="subtitle">Image Processing Demo</div>
-            <h1 className="title" style={{fontSize: '2.1rem'}}>Image Processor</h1>
+            <h1 className="title" style={{ fontSize: '2.1rem' }}>Image Processor</h1>
             <div className="description">
               Upload an image, select a processing option (resize or filter), and view the before/after.
             </div>
@@ -188,7 +235,7 @@ function App() {
             {error && <div className="banner banner-error">{error}</div>}
             {info && <div className="banner banner-info">{info}</div>}
 
-            {/* UPLOAD & OPTIONS */}
+            {/* Panels for upload and option selection */}
             <div className="panel-group">
               <div className="panel upload-panel">
                 <div style={{ marginBottom: 9, fontWeight: 500 }}>
@@ -285,11 +332,21 @@ function App() {
               <div className="preview-box">
                 <div className="preview-title">Processed</div>
                 {processedPreviewUrl ? (
-                  <img
-                    src={processedPreviewUrl}
-                    alt="Processed"
-                    className="img-preview"
-                  />
+                  <>
+                    <img
+                      src={processedPreviewUrl}
+                      alt="Processed"
+                      className="img-preview"
+                    />
+                    <button
+                      className="btn"
+                      style={{ marginTop: 17, minWidth: 135 }}
+                      onClick={handleDownload}
+                      disabled={downloading}
+                    >
+                      {downloading ? 'Downloading...' : 'Download'}
+                    </button>
+                  </>
                 ) : (
                   <div className="img-preview img-preview-placeholder">
                     No result yet
