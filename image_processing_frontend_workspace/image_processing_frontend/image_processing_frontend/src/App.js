@@ -57,6 +57,8 @@ function App() {
       setOriginalUrl(null);
       setBackendProcessedId(null);
       setProcessedUrl(null);
+      setGrayscale(false);
+      setInvert(false);
       setError('');
       setInfo('');
     }
@@ -132,6 +134,9 @@ function App() {
     } else if (processType === 'filter') {
       options.filter_type = filter;
     }
+    options.grayscale = grayscale;
+    options.invert = invert;
+
     try {
       const resp = await fetch(
         `${API_BASE}/process-image/?image_id=${backendOriginalId}`,
@@ -346,6 +351,49 @@ function App() {
                     </select>
                   </div>
                 )}
+
+                {/* Grayscale and Invert toggles */}
+                <div style={{
+                  display: "flex",
+                  gap: 22,
+                  marginTop: 12,
+                  marginBottom: processType ? 2 : 0,
+                  alignItems: "center"
+                }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: "#232" }}>
+                    <input
+                      type="checkbox"
+                      checked={grayscale}
+                      disabled={!backendOriginalId || processing}
+                      onChange={e => setGrayscale(e.target.checked)}
+                      style={{
+                        accentColor: "var(--primary)",
+                        width: 16,
+                        height: 16,
+                        cursor: (!backendOriginalId || processing) ? "not-allowed" : "pointer"
+                      }}
+                      data-testid="grayscale-checkbox"
+                    />
+                    <span style={{ fontSize: 15 }}>Grayscale</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: "#222" }}>
+                    <input
+                      type="checkbox"
+                      checked={invert}
+                      disabled={!backendOriginalId || processing}
+                      onChange={e => setInvert(e.target.checked)}
+                      style={{
+                        accentColor: "var(--accent)",
+                        width: 16,
+                        height: 16,
+                        cursor: (!backendOriginalId || processing) ? "not-allowed" : "pointer"
+                      }}
+                      data-testid="invert-checkbox"
+                    />
+                    <span style={{ fontSize: 15 }}>Invert</span>
+                  </label>
+                </div>
+
                 <button
                   className="btn btn-large"
                   style={{ marginTop: 16, width: 172 }}
