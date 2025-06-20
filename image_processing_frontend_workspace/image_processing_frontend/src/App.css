@@ -106,3 +106,106 @@ body {
   padding: 12px 24px;
   font-size: 1.1rem;
 }
+
+/* ==== Image Processing UI extensions ==== */
+.banner {
+  padding: 12px 22px;
+  margin: 12px 0;
+  border-radius: 5px;
+  font-weight: 500;
+  font-size: 1.07rem;
+  text-align: center;
+  transition: opacity 0.2s;
+}
+.banner-error {
+  background: #e5736b;
+  color: #fff6f6;
+}
+.banner-info {
+  background: #b3f2ff;
+  color: #134063;
+}
+.panel-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin: 36px 0 0 0;
+  justify-content: center;
+}
+.panel {
+  background: rgba(10, 23, 50, 0.12);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px 28px 20px 28px;
+  min-width: 220px;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  box-sizing: border-box;
+  box-shadow: 0 3px 20px 0 rgba(18,36,79,0.06);
+}
+.upload-panel {
+  background: rgba(0,255,255,0.05);
+}
+.options-panel {
+  background: rgba(1, 60, 160, 0.09);
+}
+
+.option-select, .option-input {
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--base-dark);
+  color: var(--text-color);
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-size: 1rem;
+}
+.option-select:focus, .option-input:focus {
+  outline: 2px solid var(--base-light);
+}
+
+.preview-panel {
+  margin-top: 48px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+.preview-box {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 14px 20px;
+  min-width: 220px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.preview-title {
+  font-weight: 500;
+  margin-bottom: 9px;
+  color: var(--base-light);
+}
+.img-preview {
+  max-width: 170px;
+  max-height: 170px;
+  background: #151a1a;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 5px 0 rgba(20,40,60,0.11);
+  object-fit: contain;
+}
+.img-preview-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 170px;
+  color: var(--text-secondary);
+  font-size: 1.07rem;
+  background: rgba(0, 97, 118, 0.09);
+  border: 1px dashed var(--border-color);
+}
