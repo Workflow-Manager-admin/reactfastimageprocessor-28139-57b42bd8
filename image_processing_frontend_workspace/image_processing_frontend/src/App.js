@@ -1,79 +1,76 @@
-/**
- * PUBLIC_INTERFACE
- * Modern/Minimalist React Image Processor Frontend
- * Backend base URL is fixed to deployment endpoint.
- *  - Upload: POST /upload-image/ with image
- *  - Process: POST /process-image/?image_id=ID with body options
- *  - Preview: GET /get-image/?image_id=ID&processed=(true|false)
- *  - Download: Same as preview: download processed image
- * All requests use https://vscode-internal-5476-qa.qa01.cloud.kavia.ai:3001 as base.
- *
- * UX:
- * - Step 1: Select & upload image → preview appears
- * - Step 2: Set processing options → "Process" → see processed preview, with download button
- * - Error & info banners show for feedback
- */
-
 import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 
 const API_BASE = 'https://vscode-internal-5476-qa.qa01.cloud.kavia.ai:3001';
 
 function App() {
-  // --- State ---
-  const [file, setFile] = useState(null); // Local upload file
-  const [originalUrl, setOriginalUrl] = useState(null); // Local or fetched preview
-  const [backendOriginalId, setBackendOriginalId] = useState(null);
+  // --- STATE MANAGEMENT ---
+  // Local upload file and preview
+  const [file, setFile] = useState(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState(null);
 
-  const [processType, setProcessType] = useState('resize'); // 'resize' or 'filter'
+  // Backend IDs and preview URLs
+  const [backendOriginalId, setBackendOriginalId] = useState(null);
+  const [originalUrl, setOriginalUrl] = useState(null);
+
+  // Processing options
+  const [processType, setProcessType] = useState('resize'); // or 'filter'
   const [resizeW, setResizeW] = useState('');
   const [resizeH, setResizeH] = useState('');
   const [filter, setFilter] = useState('blur');
 
-  const [processing, setProcessing] = useState(false);
+  // Loading states
   const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
+  // Processed state/results
   const [backendProcessedId, setBackendProcessedId] = useState(null);
   const [processedUrl, setProcessedUrl] = useState(null);
 
+  // UX banners
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
 
+  // Refs
   const fileInputRef = useRef();
 
-  // --- Error/info banner helpers ---
-  const displayError = msg => {
+  // --- ERROR/INFO HELPERS ---
+  function showError(msg) {
     setError(msg);
-    setTimeout(() => setError(''), 5000);
-  };
-  const displayInfo = msg => {
+    setTimeout(() => setError(''), 5200);
+  }
+  function showInfo(msg) {
     setInfo(msg);
-    setTimeout(() => setInfo(''), 3500);
-  };
+    setTimeout(() => setInfo(''), 2900);
+  }
 
-  // --- Handle file select ---
+  // --- HANDLE FILE CHOSEN (LOCAL PREVIEW) ---
   function handleFileSelect(e) {
     const chosen = e.target.files && e.target.files[0];
     if (chosen) {
       setFile(chosen);
-      setOriginalUrl(URL.createObjectURL(chosen));
+      setLocalPreviewUrl(URL.createObjectURL(chosen));
       setBackendOriginalId(null);
+      setOriginalUrl(null);
       setBackendProcessedId(null);
       setProcessedUrl(null);
+      setError('');
+      setInfo('');
     }
   }
 
-  // --- Upload image (POST /upload-image/) ---
+  // --- IMAGE UPLOAD ---
   async function handleUpload() {
     if (!file) {
-      displayError('Please select an image file first.');
+      showError('Please select an image file first.');
       return;
     }
+    setUploading(true);
     setError('');
     setInfo('');
-    setUploading(true);
     setBackendOriginalId(null);
+    setOriginalUrl(null);
     setBackendProcessedId(null);
     setProcessedUrl(null);
 
@@ -83,37 +80,41 @@ function App() {
     try {
       const resp = await fetch(`${API_BASE}/upload-image/`, {
         method: 'POST',
-        body: form
+        body: form,
       });
       let data;
       if (!resp.ok) {
         try { data = await resp.json(); } catch { }
-        displayError((data && data.detail) ? data.detail : 'Failed to upload image.');
+        showError(data && data.detail ? data.detail : 'Failed to upload image.');
         setUploading(false);
         return;
       }
       data = await resp.json();
       if (data && data.image_id) {
         setBackendOriginalId(data.image_id);
-        displayInfo('Upload successful.');
+        setInfo('Upload successful. Ready to process.');
+        showInfo('Upload successful.');
       } else {
-        displayError('Upload succeeded but did not return an image_id.');
+        showError('Upload succeeded but did not return an image ID.');
       }
     } catch (err) {
-      displayError('Could not upload: ' + (err?.message || 'Network error'));
+      showError('Could not upload: ' + (err?.message || 'Network error'));
     } finally {
       setUploading(false);
     }
   }
 
-  // --- Process image call ---
+  // --- IMAGE PROCESSING ---
   async function handleProcess() {
     if (!backendOriginalId) {
-      displayError('Please upload an image first.');
+      showError('Please upload an image first.');
       return;
     }
-    if (processType === 'resize' && (!resizeW || !resizeH)) {
-      displayError('Width and height required for resize.');
+    if (
+      processType === 'resize' &&
+      (!resizeW || !resizeH || Number(resizeW) < 8 || Number(resizeH) < 8)
+    ) {
+      showError('Width and height (min 8 px) required for resize.');
       return;
     }
     setProcessing(true);
@@ -126,8 +127,7 @@ function App() {
     if (processType === 'resize') {
       options.width = parseInt(resizeW, 10);
       options.height = parseInt(resizeH, 10);
-    }
-    if (processType === 'filter') {
+    } else if (processType === 'filter') {
       options.filter_type = filter;
     }
     try {
@@ -142,58 +142,25 @@ function App() {
       let data;
       if (!resp.ok) {
         try { data = await resp.json(); } catch { }
-        displayError((data && data.detail) ? data.detail : 'Failed to process image.');
+        showError(data && data.detail ? data.detail : 'Failed to process image.');
         setProcessing(false);
         return;
       }
       data = await resp.json();
       if (data && data.processed_id) {
         setBackendProcessedId(data.processed_id);
-        displayInfo('Processing succeeded.');
+        showInfo('Processing succeeded!');
       } else {
-        displayError('Processing succeeded but no processed image returned.');
+        showError('Processing succeeded but no processed image returned.');
       }
     } catch (err) {
-      displayError('Could not process: ' + (err?.message || 'Network error'));
+      showError('Could not process: ' + (err?.message || 'Network error'));
     } finally {
       setProcessing(false);
     }
   }
 
-  // --- Original preview updates if file or backendOriginalId changes ---
-  useEffect(() => {
-    if (!file && !backendOriginalId) {
-      setOriginalUrl(null);
-      return;
-    }
-    // If uploaded and backendId is available, always show backend-served version for data consistency.
-    if (backendOriginalId) {
-      setOriginalUrl(
-        `${API_BASE}/get-image/?image_id=${backendOriginalId}&processed=false&_=${Date.now()}`
-      );
-      return;
-    }
-    if (file) {
-      setOriginalUrl(URL.createObjectURL(file));
-      return;
-    }
-    setOriginalUrl(null);
-    // eslint-disable-next-line
-  }, [file, backendOriginalId]);
-
-  // --- Processed preview updates when backendProcessedId changes ---
-  useEffect(() => {
-    if (!backendProcessedId) {
-      setProcessedUrl(null);
-      return;
-    }
-    setProcessedUrl(
-      `${API_BASE}/get-image/?image_id=${backendProcessedId}&processed=true&_=${Date.now()}`
-    );
-    // eslint-disable-next-line
-  }, [backendProcessedId]);
-
-  // --- Download processed image ---
+  // --- DOWNLOAD HANDLER ---
   async function handleDownload() {
     if (!processedUrl) return;
     setDownloading(true);
@@ -210,15 +177,43 @@ function App() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(downloadUrl);
-      displayInfo('Downloaded!');
+      showInfo('Downloaded!');
     } catch (err) {
-      displayError('Download failed: ' + (err?.message || 'Unknown error'));
+      showError('Download failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setDownloading(false);
     }
   }
 
-  // --- UI ---
+  // --- PREVIEW STATE LOGIC (syncs preview URLs to state) ---
+  // Original (backend-served) preview after upload
+  useEffect(() => {
+    if (backendOriginalId) {
+      // Show backend-served image to reflect any backend format/changes
+      setOriginalUrl(
+        `${API_BASE}/get-image/?image_id=${backendOriginalId}&processed=false&_=${Date.now()}`
+      );
+    } else if (file) {
+      setOriginalUrl(localPreviewUrl);
+    } else {
+      setOriginalUrl(null);
+    }
+    // eslint-disable-next-line
+  }, [backendOriginalId, file, localPreviewUrl]);
+
+  // Processed (backend-served) preview after processing
+  useEffect(() => {
+    if (backendProcessedId) {
+      setProcessedUrl(
+        `${API_BASE}/get-image/?image_id=${backendProcessedId}&processed=true&_=${Date.now()}`
+      );
+    } else {
+      setProcessedUrl(null);
+    }
+    // eslint-disable-next-line
+  }, [backendProcessedId]);
+
+  // --- UI/UX ---
   return (
     <div className="app">
       <nav className="navbar">
@@ -234,7 +229,7 @@ function App() {
               style={{ minWidth: 125, fontWeight: 600 }}
               data-testid="upload-btn"
             >
-              {uploading ? 'Uploading...' : 'Upload Image'}
+              {uploading ? 'Uploading...' : 'Choose Image'}
             </button>
             <input
               type="file"
@@ -255,9 +250,8 @@ function App() {
             <div className="subtitle">Image Processing Demo</div>
             <h1 className="title" style={{ fontSize: '2.1rem' }}>Image Processor</h1>
             <div className="description">
-              Upload an image, select a processing option (resize or filter), and view the before/after.
+              Upload an image, optionally preview, select resize/filter, and view before/after. Download the result!
             </div>
-
             {error &&
               <div className="banner banner-error" role="alert">{error}</div>
             }
@@ -265,10 +259,11 @@ function App() {
               <div className="banner banner-info">{info}</div>
             }
 
+            {/* Work panels: Upload, Process options */}
             <div className="panel-group">
               <div className="panel upload-panel">
-                <div style={{ marginBottom: 9, fontWeight: 500 }}>
-                  <strong>Step 1:</strong> Select and upload image.
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>
+                  <strong>Step 1:</strong> Pick and upload image
                 </div>
                 <button
                   className="btn btn-large"
@@ -277,11 +272,20 @@ function App() {
                   style={{ width: 172 }}
                   data-testid="upload-and-preview-btn"
                 >
-                  {uploading ? 'Uploading...' : 'Upload & Preview'}
+                  {uploading ? 'Uploading...' : (file ? 'Upload & Preview' : 'Select Image')}
                 </button>
+                <div style={{ fontSize: 13, color: "#886", paddingTop: 7, minHeight: 20 }}>
+                  {file && !backendOriginalId && (
+                    <>Selected: <b>{file.name}</b></>
+                  )}
+                  {backendOriginalId && (
+                    <span>Uploaded to backend</span>
+                  )}
+                </div>
               </div>
+
               <div className="panel options-panel">
-                <div style={{ marginBottom: 9, fontWeight: 500 }}>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>
                   <strong>Step 2:</strong> Set processing options
                 </div>
                 <select
@@ -290,6 +294,7 @@ function App() {
                   onChange={e => setProcessType(e.target.value)}
                   style={{ marginBottom: 12 }}
                   data-testid="process-type-select"
+                  disabled={!backendOriginalId || processing}
                 >
                   <option value="resize">Resize</option>
                   <option value="filter">Filter</option>
@@ -307,6 +312,7 @@ function App() {
                       onChange={e => setResizeW(e.target.value)}
                       style={{ width: 82 }}
                       data-testid="resize-width"
+                      disabled={!backendOriginalId || processing}
                     />
                     <input
                       className="option-input"
@@ -319,6 +325,7 @@ function App() {
                       onChange={e => setResizeH(e.target.value)}
                       style={{ width: 82 }}
                       data-testid="resize-height"
+                      disabled={!backendOriginalId || processing}
                     />
                   </div>
                 ) : (
@@ -329,6 +336,7 @@ function App() {
                       onChange={e => setFilter(e.target.value)}
                       style={{ width: '100%' }}
                       data-testid="filter-type"
+                      disabled={!backendOriginalId || processing}
                     >
                       <option value="blur">Blur</option>
                       <option value="contour">Contour</option>
@@ -345,6 +353,11 @@ function App() {
                 >
                   {processing ? 'Processing...' : 'Process'}
                 </button>
+                <div style={{ fontSize: 12, color: "#886", paddingTop: 8, minHeight: 18 }}>
+                  {backendProcessedId && !processing && processedUrl && (
+                    <>Processed result ready!</>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -358,6 +371,7 @@ function App() {
                     alt="Original"
                     className="img-preview"
                     data-testid="original-img-preview"
+                    style={{ opacity: backendOriginalId ? 1 : 0.75 }}
                   />
                 ) : (
                   <div className="img-preview img-preview-placeholder">
@@ -374,10 +388,11 @@ function App() {
                       alt="Processed"
                       className="img-preview"
                       data-testid="processed-img-preview"
+                      style={{ opacity: 1 }}
                     />
                     <button
                       className="btn"
-                      style={{ marginTop: 17, minWidth: 135 }}
+                      style={{ marginTop: 16, minWidth: 130 }}
                       onClick={handleDownload}
                       disabled={downloading}
                       data-testid="download-btn"
@@ -387,11 +402,12 @@ function App() {
                   </>
                 ) : (
                   <div className="img-preview img-preview-placeholder">
-                    No result yet
+                    {processing ? 'Processing...' : 'No result yet'}
                   </div>
                 )}
               </div>
             </div>
+            {/* END PREVIEW */}
           </div>
         </div>
       </main>
