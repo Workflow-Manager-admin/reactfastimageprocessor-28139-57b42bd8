@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import BackgroundTasks
 from pydantic import BaseModel, Field
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
 # === Configuration ===
 IMAGE_STORAGE_DIR = "images"
@@ -53,12 +53,29 @@ class ImageUploadResponse(BaseModel):
 
 
 class ProcessRequest(BaseModel):
-    operation: str = Field(..., description="Processing operation: 'resize', 'blur', etc.")
+    """
+    Describes the image processing request.
+    Now supports the following operations:
+    - resize (requires width and height)
+    - filter (requires filter_type: blur, contour, edge_enhance)
+    - grayscale (no extra arguments)
+    - invert (no extra arguments)
+
+    Set 'operation' to one of: 'resize', 'filter', 'grayscale', 'invert'
+    """
+    operation: str = Field(..., description="Processing operation: 'resize', 'filter', 'grayscale', or 'invert'.")
     width: Optional[int] = Field(None, description="Target width (for resize)")
     height: Optional[int] = Field(None, description="Target height (for resize)")
-    filter_type: Optional[str] = Field(None, description="Blur/Sharpen/Edge Enhancement")
-    # Can be extended with more fields as needed
-
+    filter_type: Optional[str] = Field(
+        None, description="Blur/Sharpen/Edge Enhancement (for 'filter' op: 'blur', 'contour', 'edge_enhance')"
+    )
+    # New options (no extra fields needed—operation only)
+    grayscale: Optional[bool] = Field(
+        None, description="(DEPRECATED – use operation='grayscale') Set True if requesting grayscale."
+    )
+    invert: Optional[bool] = Field(
+        None, description="(DEPRECATED – use operation='invert') Set True if requesting color inversion."
+    )
 
 class ProcessResponse(BaseModel):
     processed_id: str = Field(..., description="Unique ID of the processed image")
@@ -108,7 +125,14 @@ def process_image(
     """
     Processes an image and saves the result.
     Returns: (processed_image_id, processed_image_filename)
+
+    Supported operations:
+        - resize
+        - filter
+        - grayscale
+        - invert
     """
+
     with Image.open(original_path) as img:
         processed_img = img.copy()
 
@@ -116,8 +140,9 @@ def process_image(
             if width is None or height is None:
                 raise ValueError("Width and height are required for resize.")
             processed_img = processed_img.resize((width, height))
+
         elif operation == "filter":
-            # Simple demo filters: BLUR, CONTOUR, etc.
+            # Supports: BLUR, CONTOUR, EDGE_ENHANCE
             if filter_type == "blur":
                 processed_img = processed_img.filter(ImageFilter.BLUR)
             elif filter_type == "contour":
@@ -125,9 +150,28 @@ def process_image(
             elif filter_type == "edge_enhance":
                 processed_img = processed_img.filter(ImageFilter.EDGE_ENHANCE)
             else:
-                raise ValueError("Invalid filter_type.")
+                raise ValueError("Invalid filter_type for filter operation. Use 'blur', 'contour', 'edge_enhance'.")
+
+        elif operation == "grayscale":
+            # Convert to grayscale using Pillow
+            processed_img = processed_img.convert("L").convert("RGB")  # Convert L to RGB to keep output file type consistent
+
+        elif operation == "invert":
+            # Ensure image is in a mode compatible with invert
+            if processed_img.mode in ["RGBA", "LA"]:
+                # Need to split alpha and invert only rgb
+                alpha = processed_img.split()[-1]
+                rgb = processed_img.convert("RGB")
+                inverted = ImageOps.invert(rgb)
+                inverted.putalpha(alpha)
+                processed_img = inverted
+            elif processed_img.mode != "RGB":
+                processed_img = processed_img.convert("RGB")
+                processed_img = ImageOps.invert(processed_img)
+            else:
+                processed_img = ImageOps.invert(processed_img)
         else:
-            raise ValueError("Invalid operation.")
+            raise ValueError("Invalid operation. Available: resize, filter, grayscale, invert.")
 
         processed_id = generate_unique_id()
         ext = get_file_ext(original_path) or ".png"
@@ -189,20 +233,47 @@ async def upload_image(image: UploadFile = File(...)):
     status_code=status.HTTP_200_OK,
     summary="Process an uploaded image",
     tags=["processing"],
-    description="Performs image processing (resize/filter) on an uploaded image. Returns processed image ID. POST body: {image_id, operation, ...}"
+    description="""
+Performs image processing (resize/filter/grayscale/invert) on an uploaded image.
+
+Supported operations for the 'operation' field in the request body:
+- "resize": Requires 'width' and 'height'
+- "filter": Requires 'filter_type' (choose from 'blur', 'contour', 'edge_enhance')
+- "grayscale": Converts the image to grayscale (no additional parameters)
+- "invert": Inverts the colors of the image (no additional parameters)
+
+Legacy boolean flags 'grayscale' and 'invert' are supported for backwards compatibility, but 'operation' is preferred.
+
+Returns processed image ID and info. POST body: {image_id, operation, ...}
+"""
 )
 def process_image_endpoint(process_req: ProcessRequest, image_id: str = Query(..., description="ID of image to process")):
     """
     Process an uploaded image (by image_id) using specified operation and parameters.
+
+    To use:
+      - Set 'operation' to "resize" and provide 'width' and 'height'
+      - Set 'operation' to "filter" and provide 'filter_type'
+      - Set 'operation' to "grayscale" (no other params)
+      - Set 'operation' to "invert" (no other params)
+
+    For backwards compatibility, providing grayscale=True or invert=True will override 'operation'.
     """
     original_path = get_image_path(image_id, processed=False)
     if not original_path or not os.path.exists(original_path):
         raise HTTPException(status_code=404, detail="Image not found.")
 
+    # Backwards compatibility: honor boolean flags if set, override 'operation'
+    op = process_req.operation
+    if process_req.grayscale:
+        op = "grayscale"
+    elif process_req.invert:
+        op = "invert"
+
     try:
         processed_id, processed_fn = process_image(
             original_path,
-            process_req.operation,
+            op,
             width=process_req.width,
             height=process_req.height,
             filter_type=process_req.filter_type
@@ -215,7 +286,7 @@ def process_image_endpoint(process_req: ProcessRequest, image_id: str = Query(..
     return ProcessResponse(
         processed_id=processed_id,
         original_id=image_id,
-        operation=process_req.operation,
+        operation=op,
         filename=processed_fn,
         message="Image processed successfully."
     )
