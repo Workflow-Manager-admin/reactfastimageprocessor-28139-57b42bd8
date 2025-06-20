@@ -1,10 +1,16 @@
 import React, { useState, useRef } from 'react';
 import './App.css';
 
-// Backend base URL - adjust to deployment as needed
-const API_BASE =
-  process.env.REACT_APP_BACKEND_BASE ||
-  'https://vscode-internal-5476-qa.qa01.cloud.kavia.ai:3001';
+/**
+ * Backend base URL - adjust to deployment as needed.
+ * For frontend safety, guard usage of process.env and fallback gracefully,
+ * since process may not exist in some frontend bundle configurations.
+ */
+let backendBase = 'https://vscode-internal-5476-qa.qa01.cloud.kavia.ai:3001';
+if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_BASE) {
+  backendBase = process.env.REACT_APP_BACKEND_BASE;
+}
+const API_BASE = backendBase;
 
 function App() {
   // State for the original uploaded image
