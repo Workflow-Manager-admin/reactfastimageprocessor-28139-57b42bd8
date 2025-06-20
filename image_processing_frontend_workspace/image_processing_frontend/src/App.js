@@ -1,34 +1,34 @@
 import React, { useState, useRef } from 'react';
 import './App.css';
 
+// PUBLIC_INTERFACE
 /**
- * Backend base URL - adjust to deployment as needed.
- * For frontend safety, guard usage of process.env and fallback gracefully,
- * since process may not exist in some frontend bundle configurations.
+ * Modern/Minimalist React Image Processor Frontend
+ * Backend base URL is fixed to deployment endpoint.
+ * All fetches use this URL.
  */
-let backendBase = 'https://vscode-internal-5476-qa.qa01.cloud.kavia.ai:3001';
-if (typeof process !== 'undefined' && process.env && process.env.REACT_APP_BACKEND_BASE) {
-  backendBase = process.env.REACT_APP_BACKEND_BASE;
-}
-const API_BASE = backendBase;
+const API_BASE = 'https://vscode-internal-5476-qa.qa01.cloud.kavia.ai:3001';
 
 function App() {
   // State for the original uploaded image
   const [originalFile, setOriginalFile] = useState(null);
   const [originalPreviewUrl, setOriginalPreviewUrl] = useState(null);
   const [originalImageId, setOriginalImageId] = useState(null);
+
   // State for processing
   const [processingOption, setProcessingOption] = useState('resize'); // 'resize' or 'filter'
   const [resizeWidth, setResizeWidth] = useState('');
   const [resizeHeight, setResizeHeight] = useState('');
-  const [filterType, setFilterType] = useState('blur'); // Default for filters
+  const [filterType, setFilterType] = useState('blur');
   const [processing, setProcessing] = useState(false);
   const [processedImageId, setProcessedImageId] = useState(null);
   const [processedPreviewUrl, setProcessedPreviewUrl] = useState(null);
-  // Notification + error states
+
+  // Notification & error
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [uploading, setUploading] = useState(false);
+
   const inputFileRef = useRef();
 
   // Helpers for feedback
@@ -38,10 +38,10 @@ function App() {
   };
   const handleInfo = (msg) => {
     setInfo(msg);
-    setTimeout(() => setInfo(''), 4000);
+    setTimeout(() => setInfo(''), 3500);
   };
 
-  // Step 1: User selects file and uploads it
+  // Step 1: User selects file
   const handleFileSelect = (e) => {
     setProcessedImageId(null);
     setProcessedPreviewUrl(null);
@@ -49,10 +49,10 @@ function App() {
     if (!file) return;
     setOriginalFile(file);
     setOriginalImageId(null);
-    // Preview
     setOriginalPreviewUrl(URL.createObjectURL(file));
   };
 
+  // Step 1b: Upload
   const uploadImage = async () => {
     if (!originalFile) return;
     setUploading(true);
@@ -83,7 +83,7 @@ function App() {
     }
   };
 
-  // Step 2: User selects processing and sends to backend
+  // Step 2: Processing
   const handleProcess = async () => {
     if (!originalImageId) {
       handleError('Please upload an image first');
@@ -94,7 +94,6 @@ function App() {
     setProcessedPreviewUrl(null);
     setError('');
     setInfo('');
-    // Compose process request
     let reqBody = { operation: processingOption };
     if (processingOption === 'resize') {
       if (!resizeWidth || !resizeHeight) {
@@ -118,9 +117,7 @@ function App() {
       );
       if (!resp.ok) {
         const err = await resp.json();
-        throw new Error(
-          err.detail || 'Processing failed'
-        );
+        throw new Error(err.detail || 'Processing failed');
       }
       const data = await resp.json();
       setProcessedImageId(data.processed_id);
@@ -132,9 +129,8 @@ function App() {
     }
   };
 
-  // Step 3: Fetch image for display (original or processed)
+  // Step 3: Recompute image URLs
   React.useEffect(() => {
-    // Original
     if (originalImageId) {
       setOriginalPreviewUrl(
         `${API_BASE}/get-image/?image_id=${originalImageId}&processed=false&_=${Date.now()}`
@@ -149,20 +145,20 @@ function App() {
     }
   }, [processedImageId]);
 
-  // --- RENDER ---
+  // --- MAIN RENDER ---
   return (
     <div className="app">
       <nav className="navbar">
-        <div className="container">
-          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+        <div className="container" style={{width: '100%'}}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
             <div className="logo">
-              <span className="logo-symbol">*</span> KAVIA AI
+              <span className="logo-symbol">★</span> KAVIA AI
             </div>
             <button
               className="btn"
-              style={{background: 'var(--base-light)'}}
               onClick={() => inputFileRef.current && inputFileRef.current.click()}
               disabled={uploading}
+              style={{minWidth: 125, fontWeight: 600}}
             >
               {uploading ? 'Uploading...' : 'Upload Image'}
             </button>
@@ -181,11 +177,11 @@ function App() {
 
       <main>
         <div className="container">
-          <div className="hero" style={{paddingTop: 120, paddingBottom: 32, gap: 20}}>
+          <div className="hero" style={{paddingTop: 70, paddingBottom: 25, gap: 16}}>
             <div className="subtitle">Image Processing Demo</div>
-            <h1 className="title" style={{fontSize: '2.8rem'}}>Image Processor</h1>
+            <h1 className="title" style={{fontSize: '2.1rem'}}>Image Processor</h1>
             <div className="description">
-              Upload an image, select a processing option (resize or filter), and view the before/after!
+              Upload an image, select a processing option (resize or filter), and view the before/after.
             </div>
 
             {/* Notifications */}
@@ -195,29 +191,27 @@ function App() {
             {/* UPLOAD & OPTIONS */}
             <div className="panel-group">
               <div className="panel upload-panel">
-                <div style={{ marginBottom: 8 }}>
-                  <strong>Step 1:</strong> Select and upload an image file.
+                <div style={{ marginBottom: 9, fontWeight: 500 }}>
+                  <strong>Step 1:</strong> Select and upload image.
                 </div>
                 <button
                   className="btn btn-large"
                   onClick={uploadImage}
                   disabled={!originalFile || uploading}
-                  style={{ width: 180 }}
+                  style={{ width: 172 }}
                 >
-                  {uploading
-                    ? 'Uploading...'
-                    : 'Upload & Preview'}
+                  {uploading ? 'Uploading...' : 'Upload & Preview'}
                 </button>
               </div>
               <div className="panel options-panel">
-                <div style={{ marginBottom: 8 }}>
+                <div style={{ marginBottom: 9, fontWeight: 500 }}>
                   <strong>Step 2:</strong> Set processing options
                 </div>
                 <select
                   className="option-select"
                   value={processingOption}
                   onChange={e => setProcessingOption(e.target.value)}
-                  style={{ marginBottom: 10 }}
+                  style={{ marginBottom: 12 }}
                 >
                   <option value="resize">Resize</option>
                   <option value="filter">Filter</option>
@@ -233,7 +227,7 @@ function App() {
                       max={4096}
                       step={1}
                       onChange={e => setResizeWidth(e.target.value)}
-                      style={{ width: 90 }}
+                      style={{ width: 82 }}
                     />
                     <input
                       className="option-input"
@@ -244,7 +238,7 @@ function App() {
                       max={4096}
                       step={1}
                       onChange={e => setResizeHeight(e.target.value)}
-                      style={{ width: 90 }}
+                      style={{ width: 82 }}
                     />
                   </div>
                 ) : (
@@ -253,6 +247,7 @@ function App() {
                       className="option-select"
                       value={filterType}
                       onChange={e => setFilterType(e.target.value)}
+                      style={{ width: '100%' }}
                     >
                       <option value="blur">Blur</option>
                       <option value="contour">Contour</option>
@@ -262,7 +257,7 @@ function App() {
                 )}
                 <button
                   className="btn btn-large"
-                  style={{ marginTop: 15, width: 180 }}
+                  style={{ marginTop: 16, width: 172 }}
                   onClick={handleProcess}
                   disabled={!originalImageId || processing}
                 >
@@ -303,7 +298,6 @@ function App() {
               </div>
             </div>
           </div>
-          {/* End hero */}
         </div>
       </main>
     </div>
