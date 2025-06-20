@@ -32,7 +32,14 @@ In the project directory, you can run:
 ### `npm start`
 
 Runs the app in development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Open [http://localhost:3000](http://localhost:3000) to view it in your browser.\
+**Note:** The app is configured to run on port 300. If you encounter an error stating the port is in use, terminate the existing process using port 300 or choose an alternate port.
+To check and terminate the process using port 300:
+```sh
+lsof -i:3000
+kill -9 <PID>
+```
+Replace `<PID>` with the value from the `PID` column.
 
 ### `npm test`
 
