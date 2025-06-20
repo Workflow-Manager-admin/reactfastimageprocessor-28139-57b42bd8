@@ -1,0 +1,4 @@
+{
+    "command": "source venv/bin/activate && uvicorn src.api.main:app --host 0.0.0.0 --port <port> --reload",
+    "working_directory": "/home/kavia/workspace/code-generation/reactfastimageprocessor-28139-57b42bd8/image_processing_backend_workspace/image_processing_backend"
+}
